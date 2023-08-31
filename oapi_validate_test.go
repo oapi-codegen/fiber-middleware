@@ -1,4 +1,4 @@
-package middleware
+package fibermiddleware
 
 import (
 	"bytes"

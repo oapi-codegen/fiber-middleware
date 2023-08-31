@@ -1,7 +1,7 @@
 // Package middleware implements middleware function for server implementations,
 // which validates incoming HTTP requests to make sure that they conform to the given OAPI 3.0 specification.
 // When OAPI validation fails on the request, we return an HTTP/400.
-package middleware
+package fibermiddleware
 
 import (
 	"context"
