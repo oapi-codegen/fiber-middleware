@@ -3,7 +3,7 @@ module github.com/oapi-codegen/fiber-middleware
 go 1.20
 
 require (
-	github.com/getkin/kin-openapi v0.118.0
+	github.com/getkin/kin-openapi v0.122.0
 	github.com/gofiber/fiber/v2 v2.49.1
 	github.com/stretchr/testify v1.8.4
 )
@@ -23,7 +23,7 @@ require (
 	github.com/mattn/go-isatty v0.0.19 // indirect
 	github.com/mattn/go-runewidth v0.0.15 // indirect
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 // indirect
-	github.com/perimeterx/marshmallow v1.1.4 // indirect
+	github.com/perimeterx/marshmallow v1.1.5 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rivo/uniseg v0.4.4 // indirect
 	github.com/ugorji/go/codec v1.2.11 // indirect
