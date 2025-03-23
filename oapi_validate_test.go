@@ -15,7 +15,7 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -80,7 +80,7 @@ func TestOapiRequestValidator(t *testing.T) {
 	// Set up an authenticator to check authenticated function. It will allow
 	// access to "someScope", but disallow others.
 	options := Options{
-		ErrorHandler: func(c *fiber.Ctx, message string, statusCode int) {
+		ErrorHandler: func(c fiber.Ctx, message string, statusCode int) {
 			_ = c.Status(statusCode).SendString("test: " + message)
 		},
 		Options: openapi3filter.Options{
@@ -112,7 +112,7 @@ func TestOapiRequestValidator(t *testing.T) {
 
 	// Install a request handler for /resource. We want to make sure it doesn't
 	// get called.
-	app.Get("/resource", func(c *fiber.Ctx) error {
+	app.Get("/resource", func(c fiber.Ctx) error {
 		called = true
 		return nil
 	})
@@ -148,7 +148,7 @@ func TestOapiRequestValidator(t *testing.T) {
 	}
 
 	// Add a handler for the POST message
-	app.Post("/resource", func(c *fiber.Ctx) error {
+	app.Post("/resource", func(c fiber.Ctx) error {
 		called = true
 		return c.SendStatus(http.StatusNoContent)
 	})
@@ -180,7 +180,7 @@ func TestOapiRequestValidator(t *testing.T) {
 		called = false
 	}
 
-	app.Get("/protected_resource", func(c *fiber.Ctx) error {
+	app.Get("/protected_resource", func(c fiber.Ctx) error {
 		called = true
 		return c.SendStatus(http.StatusNoContent)
 	})
@@ -193,7 +193,7 @@ func TestOapiRequestValidator(t *testing.T) {
 		called = false
 	}
 
-	app.Get("/protected_resource2", func(c *fiber.Ctx) error {
+	app.Get("/protected_resource2", func(c fiber.Ctx) error {
 		called = true
 		return c.SendStatus(http.StatusNoContent)
 	})
@@ -205,7 +205,7 @@ func TestOapiRequestValidator(t *testing.T) {
 		called = false
 	}
 
-	app.Get("/protected_resource_401", func(c *fiber.Ctx) error {
+	app.Get("/protected_resource_401", func(c fiber.Ctx) error {
 		called = true
 		return c.SendStatus(http.StatusNoContent)
 	})
@@ -246,7 +246,7 @@ func TestOapiRequestValidatorWithOptionsMultiError(t *testing.T) {
 
 	// Install a request handler for /resource. We want to make sure it doesn't
 	// get called.
-	app.Get("/multiparamresource", func(c *fiber.Ctx) error {
+	app.Get("/multiparamresource", func(c fiber.Ctx) error {
 		called = true
 		return nil
 	})
@@ -353,7 +353,7 @@ func TestOapiRequestValidatorWithOptionsMultiErrorAndCustomHandler(t *testing.T)
 
 	// Install a request handler for /resource. We want to make sure it doesn't
 	// get called.
-	app.Get("/multiparamresource", func(c *fiber.Ctx) error {
+	app.Get("/multiparamresource", func(c fiber.Ctx) error {
 		called = true
 		return nil
 	})
