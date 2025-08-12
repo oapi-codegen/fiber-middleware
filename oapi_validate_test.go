@@ -432,3 +432,62 @@ func TestOapiRequestValidatorWithOptionsMultiErrorAndCustomHandler(t *testing.T)
 		called = false
 	}
 }
+
+func TestOapiRequestValidatorEscapedPathHandling(t *testing.T) {
+	swagger, err := openapi3.NewLoader().LoadFromData(testSchema)
+	require.NoError(t, err, "Error initializing swagger")
+
+	for _, decodePathParams := range []bool{false, true} {
+		app := fiber.New()
+
+		// Set up an authenticator to check authenticated function. It will allow
+		// access to "someScope", but disallow others.
+		options := Options{
+			Options: openapi3filter.Options{
+				ExcludeRequestBody:    false,
+				ExcludeResponseBody:   false,
+				IncludeResponseStatus: true,
+				MultiError:            true,
+			},
+			MultiErrorHandler: func(me openapi3.MultiError) error {
+				return fmt.Errorf("Bad stuff -  %s", me.Error())
+			},
+			DecodePathParams: decodePathParams,
+		}
+
+		// register middleware
+		app.Use(OapiRequestValidatorWithOptions(swagger, &options))
+
+		app.Get("/escaped_param/:id", func(c *fiber.Ctx) error {
+			return nil
+		})
+
+		// The spec has a max length of 12 and should reject the 👎 character. The escaped
+		// version of unicode characters are much longer and are used to test the validator setting.
+		tests := []struct {
+			param              string
+			validIfDecodeFalse bool
+			validIfDecodeTrue  bool
+		}{
+			{"12_long_isok", true, true},
+			{"🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂", false, true},
+			{"🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂", false, false},
+			{"👎", true, false},
+			{"this_is_too_long", false, false},
+		}
+
+		for i, test := range tests {
+			res := doGet(t, app, fmt.Sprintf("https://deepmap.ai/escaped_param/%s", test.param))
+			valid := res.StatusCode == http.StatusOK
+
+			body, _ := io.ReadAll(res.Body)
+			defer res.Body.Close()
+
+			if decodePathParams {
+				assert.Equal(t, test.validIfDecodeTrue, valid, "Test case %d failed: %s", i+1, string(body))
+			} else {
+				assert.Equal(t, test.validIfDecodeFalse, valid, "Test case %d failed: %s", i+1, string(body))
+			}
+		}
+	}
+}

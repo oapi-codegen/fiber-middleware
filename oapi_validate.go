@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 
@@ -60,6 +61,9 @@ type Options struct {
 	ParamDecoder      openapi3filter.ContentParameterDecoder
 	UserData          interface{}
 	MultiErrorHandler MultiErrorHandler
+
+	// DecodePathParams enables decoding/unescaping of path parameters
+	DecodePathParams bool
 }
 
 // OapiRequestValidatorWithOptions creates a validator from a swagger object, with validation options
@@ -97,6 +101,20 @@ func ValidateRequestFromContext(c *fiber.Ctx, router routers.Router, options *Op
 	}
 
 	route, pathParams, err := router.FindRoute(r)
+
+	// FindRoute returns pathParams as percent-encoded values. This can make validation
+	// of length, character set, and other aspects more difficult if non-ASCII input is
+	// expected. These may be optionally decoded, but the default is to leave them as-is
+	// for backward compatibility.
+	if options.DecodePathParams {
+		for k, v := range pathParams {
+			p, err := url.PathUnescape(v)
+			if err != nil {
+				return err
+			}
+			pathParams[k] = p
+		}
+	}
 
 	// We failed to find a matching route for the request.
 	if err != nil {
