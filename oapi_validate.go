@@ -15,8 +15,8 @@ import (
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/getkin/kin-openapi/routers"
 	"github.com/getkin/kin-openapi/routers/gorillamux"
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/adaptor"
+	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/middleware/adaptor"
 )
 
 type ctxKeyFiberContext struct{}
@@ -47,7 +47,7 @@ func OapiRequestValidator(swagger *openapi3.T) fiber.Handler {
 }
 
 // ErrorHandler is called when there is an error in validation
-type ErrorHandler func(c *fiber.Ctx, message string, statusCode int)
+type ErrorHandler func(c fiber.Ctx, message string, statusCode int)
 
 // MultiErrorHandler is called when oapi returns a MultiError type
 type MultiErrorHandler func(openapi3.MultiError) error
@@ -70,7 +70,7 @@ func OapiRequestValidatorWithOptions(swagger *openapi3.T, options *Options) fibe
 		panic(err)
 	}
 
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 
 		err := ValidateRequestFromContext(c, router, options)
 		if err != nil {
@@ -89,7 +89,7 @@ func OapiRequestValidatorWithOptions(swagger *openapi3.T, options *Options) fibe
 
 // ValidateRequestFromContext is called from the middleware above and actually does the work
 // of validating a request.
-func ValidateRequestFromContext(c *fiber.Ctx, router routers.Router, options *Options) error {
+func ValidateRequestFromContext(c fiber.Ctx, router routers.Router, options *Options) error {
 
 	r, err := adaptor.ConvertRequest(c, false)
 	if err != nil {
@@ -157,13 +157,13 @@ func ValidateRequestFromContext(c *fiber.Ctx, router routers.Router, options *Op
 
 // GetFiberContext gets the fiber context from within requests. It returns
 // nil if not found or wrong type.
-func GetFiberContext(c context.Context) *fiber.Ctx {
+func GetFiberContext(c context.Context) fiber.Ctx {
 	iface := c.Value(ctxKeyFiberContext{})
 	if iface == nil {
 		return nil
 	}
 
-	fiberCtx, ok := iface.(*fiber.Ctx)
+	fiberCtx, ok := iface.(fiber.Ctx)
 	if ok {
 		return fiberCtx
 	}
