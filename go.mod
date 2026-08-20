@@ -3,7 +3,7 @@ module github.com/oapi-codegen/fiber-middleware
 go 1.25.0
 
 require (
-	github.com/getkin/kin-openapi v0.143.0
+	github.com/getkin/kin-openapi v0.144.0
 	github.com/gofiber/fiber/v2 v2.52.14
 	github.com/stretchr/testify v1.11.1
 )
