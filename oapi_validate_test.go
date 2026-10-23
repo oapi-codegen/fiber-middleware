@@ -432,3 +432,77 @@ func TestOapiRequestValidatorWithOptionsMultiErrorAndCustomHandler(t *testing.T)
 		called = false
 	}
 }
+
+func TestOapiRequestValidatorKeepValidatedValue(t *testing.T) {
+	swagger, err := openapi3.NewLoader().LoadFromData(testSchema)
+	require.NoError(t, err, "Error initializing swagger")
+
+	tests := []struct {
+		name          string
+		options       *Options
+		wantValidated bool
+	}{
+		{
+			name:          "nil options keep the validated value",
+			options:       nil,
+			wantValidated: true,
+		},
+		{
+			name:          "empty options keep the validated value",
+			options:       &Options{},
+			wantValidated: true,
+		},
+		{
+			name: "DiscardValidatedValue drops the validated value",
+			options: &Options{
+				DiscardValidatedValue: true,
+				// DiscardValidatedValue overrides the openapi3filter setting.
+				Options: openapi3filter.Options{KeepValidatedValue: true},
+			},
+			wantValidated: false,
+		},
+		{
+			name: "ExcludeRequestBody skips body validation",
+			options: &Options{
+				Options: openapi3filter.Options{ExcludeRequestBody: true},
+			},
+			wantValidated: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := fiber.New()
+			if tt.options == nil {
+				app.Use(OapiRequestValidator(swagger))
+			} else {
+				app.Use(OapiRequestValidatorWithOptions(swagger, tt.options))
+			}
+
+			var got any
+			var found bool
+			var rawBody string
+			app.Post("/resource", func(c *fiber.Ctx) error {
+				got, found = ValidatedBody(c)
+				rawBody = string(c.Body())
+				return c.SendStatus(http.StatusNoContent)
+			})
+
+			body := struct {
+				Name string `json:"name"`
+			}{Name: "Marcin"}
+			res := doPost(t, app, "https://deepmap.ai/resource", body)
+			require.Equal(t, http.StatusNoContent, res.StatusCode)
+			// The original body is untouched for the handler either way.
+			assert.JSONEq(t, `{"name":"Marcin"}`, rawBody)
+
+			if !tt.wantValidated {
+				assert.False(t, found)
+				assert.Nil(t, got)
+				return
+			}
+			require.True(t, found, "validated value should be stored under ValidatedBodyLocalsKey")
+			assert.Equal(t, map[string]any{"name": "Marcin"}, got)
+		})
+	}
+}
