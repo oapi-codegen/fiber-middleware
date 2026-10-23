@@ -432,3 +432,168 @@ func TestOapiRequestValidatorWithOptionsMultiErrorAndCustomHandler(t *testing.T)
 		called = false
 	}
 }
+
+func TestFilterOptions(t *testing.T) {
+	t.Run("nil options keep the validated value", func(t *testing.T) {
+		got := filterOptions(nil)
+		require.NotNil(t, got)
+		assert.True(t, got.KeepValidatedValue)
+	})
+
+	t.Run("zero options keep the validated value", func(t *testing.T) {
+		got := filterOptions(&Options{})
+		require.NotNil(t, got)
+		assert.True(t, got.KeepValidatedValue)
+	})
+
+	t.Run("DiscardValidatedValue turns it off", func(t *testing.T) {
+		got := filterOptions(&Options{DiscardValidatedValue: true})
+		require.NotNil(t, got)
+		assert.False(t, got.KeepValidatedValue)
+	})
+
+	t.Run("DiscardValidatedValue overrides Options.KeepValidatedValue", func(t *testing.T) {
+		got := filterOptions(&Options{
+			Options:               openapi3filter.Options{KeepValidatedValue: true},
+			DiscardValidatedValue: true,
+		})
+		assert.False(t, got.KeepValidatedValue)
+	})
+
+	t.Run("other fields are preserved and the caller's struct is not mutated", func(t *testing.T) {
+		options := &Options{
+			Options: openapi3filter.Options{
+				ExcludeRequestBody:    true,
+				IncludeResponseStatus: true,
+				MultiError:            true,
+				SkipSettingDefaults:   true,
+			},
+		}
+		got := filterOptions(options)
+		assert.True(t, got.KeepValidatedValue)
+		assert.True(t, got.ExcludeRequestBody)
+		assert.True(t, got.IncludeResponseStatus)
+		assert.True(t, got.MultiError)
+		assert.True(t, got.SkipSettingDefaults)
+
+		assert.NotSame(t, &options.Options, got)
+		assert.False(t, options.Options.KeepValidatedValue, "caller's Options must not be modified")
+		assert.False(t, options.DiscardValidatedValue)
+	})
+}
+
+// TestValidatedValueOption checks that request validation behaves the same
+// whether the validated value is kept (the default) or discarded. Fiber
+// handlers cannot observe the validated value yet, because validation runs on
+// a converted copy of the request, so this only checks what is observable:
+// valid requests reach the handler with their body intact, invalid ones are
+// rejected.
+func TestValidatedValueOption(t *testing.T) {
+	swagger, err := openapi3.NewLoader().LoadFromData(testSchema)
+	require.NoError(t, err, "Error initializing swagger")
+
+	tests := []struct {
+		name       string
+		middleware func() fiber.Handler
+	}{
+		{
+			name:       "default without options",
+			middleware: func() fiber.Handler { return OapiRequestValidator(swagger) },
+		},
+		{
+			name:       "default with zero options",
+			middleware: func() fiber.Handler { return OapiRequestValidatorWithOptions(swagger, &Options{}) },
+		},
+		{
+			name: "DiscardValidatedValue",
+			middleware: func() fiber.Handler {
+				return OapiRequestValidatorWithOptions(swagger, &Options{DiscardValidatedValue: true})
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := fiber.New()
+			app.Use(tt.middleware())
+
+			called := false
+			var gotBody []byte
+			app.Get("/resource", func(c *fiber.Ctx) error {
+				called = true
+				return nil
+			})
+			app.Post("/resource", func(c *fiber.Ctx) error {
+				called = true
+				gotBody = append([]byte(nil), c.Body()...)
+				return c.SendStatus(http.StatusNoContent)
+			})
+
+			// A valid query parameter passes.
+			{
+				res := doGet(t, app, "https://deepmap.ai/resource?id=50")
+				assert.Equal(t, http.StatusOK, res.StatusCode)
+				assert.True(t, called, "Handler should have been called")
+				called = false
+			}
+
+			// An out-of-spec query parameter is rejected.
+			{
+				res := doGet(t, app, "https://deepmap.ai/resource?id=500")
+				assert.Equal(t, http.StatusBadRequest, res.StatusCode)
+				assert.False(t, called, "Handler should not have been called")
+				called = false
+			}
+
+			// A valid body passes and reaches the handler unchanged.
+			{
+				body := map[string]any{"name": "Marcin"}
+				res := doPost(t, app, "https://deepmap.ai/resource", body)
+				assert.Equal(t, http.StatusNoContent, res.StatusCode)
+				assert.True(t, called, "Handler should have been called")
+				assert.JSONEq(t, `{"name":"Marcin"}`, string(gotBody))
+				called = false
+				gotBody = nil
+			}
+
+			// A body that violates the schema is rejected.
+			{
+				body := map[string]any{"name": 7}
+				res := doPost(t, app, "https://deepmap.ai/resource", body)
+				assert.Equal(t, http.StatusBadRequest, res.StatusCode)
+				assert.False(t, called, "Handler should not have been called")
+				called = false
+			}
+		})
+	}
+}
+
+// TestValidatedValueOptionPreservesUnexportedOptions checks that copying the
+// caller's openapi3filter.Options keeps settings that are only reachable
+// through methods, such as the custom schema error function.
+func TestValidatedValueOptionPreservesUnexportedOptions(t *testing.T) {
+	swagger, err := openapi3.NewLoader().LoadFromData(testSchema)
+	require.NoError(t, err, "Error initializing swagger")
+
+	options := &Options{
+		ErrorHandler: func(c *fiber.Ctx, message string, statusCode int) {
+			_ = c.Status(statusCode).SendString(message)
+		},
+	}
+	options.Options.WithCustomSchemaErrorFunc(func(*openapi3.SchemaError) string {
+		return "custom schema error"
+	})
+
+	app := fiber.New()
+	app.Use(OapiRequestValidatorWithOptions(swagger, options))
+	app.Post("/resource", func(c *fiber.Ctx) error {
+		return c.SendStatus(http.StatusNoContent)
+	})
+
+	res := doPost(t, app, "https://deepmap.ai/resource", map[string]any{"name": 7})
+	assert.Equal(t, http.StatusBadRequest, res.StatusCode)
+	body, err := io.ReadAll(res.Body)
+	require.NoError(t, err)
+	assert.Contains(t, string(body), "custom schema error")
+	assert.False(t, options.Options.KeepValidatedValue, "caller's Options must not be modified")
+}
